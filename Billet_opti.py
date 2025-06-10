@@ -79,7 +79,7 @@ if optimize and cut_length > 0 and num_holes > 0 and kg_per_m > 0:
     if best_billet_length is not None:
     
         col1, col2, col3 = st.columns(3)
-        col1.metric("Optimal Billet Length (m)", f"{best_billet_length}")
+        col1.metric("Optimal Billet Length (cm)", f"{best_billet_length}")
         col2.metric("Max Recovery (%)", f"{max_recovery:.2f}")
         col3.metric("Pieces per Billet", f"{pcs_results[best_billet_length]}")
 
@@ -113,7 +113,7 @@ if optimize and cut_length > 0 and num_holes > 0 and kg_per_m > 0:
     # Summary Table
     st.subheader("🧾 Summary Table")
     df_summary = pd.DataFrame({
-        "Billet Length (m)": billet_lengths,
+        "Billet Length (cm)": billet_lengths,
         "Margin Length (m)": [round(margin_results[b], 2) for b in billet_lengths],
         "Recovery (%)": [round(recovery_results[b], 2) for b in billet_lengths],
         "Pieces": [pcs_results[b] for b in billet_lengths]
@@ -131,7 +131,7 @@ if optimize and cut_length > 0 and num_holes > 0 and kg_per_m > 0:
 
     # Bar trace with data labels
     trace1 = go.Bar(
-        x=df_summary["Billet Length (m)"],
+        x=df_summary["Billet Length (cm)"],
         y=df_summary["Recovery (%)"],
         name="Recovery (%)",
         marker=dict(color='rgba(0, 200, 83, 0.7)', line=dict(width=1, color='black')),
@@ -144,10 +144,10 @@ if optimize and cut_length > 0 and num_holes > 0 and kg_per_m > 0:
     layout = go.Layout(
         title="Billet Length vs Recovery",
         xaxis=dict(
-            title="Billet Length (m)",
+            title="Billet Length (cm)",
             showgrid=False,          
-            tickvals=df_summary["Billet Length (m)"],
-            ticktext=df_summary["Billet Length (m)"],
+            tickvals=df_summary["Billet Length (cm)"],
+            ticktext=df_summary["Billet Length (cm)"],
             tickangle=0,             
             linecolor='black',
             linewidth=1
