@@ -120,7 +120,7 @@ if optimize and cut_length > 0 and num_holes > 0 and kg_per_m > 0:
     }).sort_values(by="Recovery (%)", ascending=False)
 
     def highlight_optimal(row):
-        return ['background-color: #ffe599' if row['Billet Length (m)'] == best_billet_length else '' for _ in row]
+        return ['background-color: #ffe599' if row['Billet Length (cm)'] == best_billet_length else '' for _ in row]
 
     st.dataframe(df_summary.style.apply(highlight_optimal, axis=1), height=400)
 
