@@ -2,7 +2,6 @@ import streamlit as st
 import numpy as np
 import plotly.graph_objs as go
 import pandas as pd
-import os
 from datetime import datetime
 
 # Page configuration
@@ -36,7 +35,7 @@ num_holes = st.sidebar.number_input("Number of Holes in Die", min_value=1, step=
 kg_per_m = st.sidebar.number_input("kg/m", min_value=0.001, step=0.01, format="%.3f")
 caustic_etching = st.sidebar.radio("Is Caustic Etching applied?", ['Yes', 'No'])
 butt_weight = st.sidebar.number_input("The Butt weight (Kg)", min_value=1, value=4, step=1)
-optimize=st.sidebar.button("🚀 Find Optimized Billet")
+optimize = st.sidebar.button("🚀 Find Optimized Billet")
 
 # Rounding logic
 rounding_option = 2 if caustic_etching == 'Yes' else 1
@@ -48,10 +47,15 @@ if optimize and cut_length > 0 and num_holes > 0 and kg_per_m > 0:
     recovery_results = {}
     margin_results = {}
     pcs_results = {}
+    extrusion_results = {}
 
     for b in billet_lengths:
         billet_wt = b * conversion_factor
         output_len = (billet_wt - butt_weight) / (num_holes * kg_per_m)
+
+        if output_len > 28:
+            continue  # Skip this billet length
+
         output_pcs = output_len / cut_length
 
         if 1 < output_pcs < 2:
@@ -69,67 +73,83 @@ if optimize and cut_length > 0 and num_holes > 0 and kg_per_m > 0:
         recovery_results[b] = recovery
         margin_results[b] = margin_length
         pcs_results[b] = int(output_pcs_margin)
+        extrusion_results[b] = output_len
 
-        if recovery > max_recovery and margin_length > 0.15*output_len:
+        if recovery > max_recovery and margin_length > 0.15 * output_len:
             max_recovery = recovery
             best_billet_length = b
 
-    # Display optimal results using st.metric
     st.subheader("📈 Optimal Result")
     if best_billet_length is not None:
-    
         col1, col2, col3 = st.columns(3)
         col1.metric("Optimal Billet Length (cm)", f"{best_billet_length}")
         col2.metric("Max Recovery (%)", f"{max_recovery:.2f}")
         col3.metric("Pieces per Billet", f"{pcs_results[best_billet_length]}")
-
-    #     # Log the results
-    #     log_entry = {
-    #         "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-    #         "Cut Length (m)": cut_length,
-    #         "Number of Holes": num_holes,
-    #         "kg/m": kg_per_m,
-    #         "Caustic Etching": caustic_etching,
-    #         "Butt Weight (Kg)": butt_weight,
-    #         "Optimal Billet Length (m)": best_billet_length,
-    #         "Max Recovery (%)": round(max_recovery, 2),
-    #         "Margin Length (m)": round(margin_results[best_billet_length], 2),
-    #         "Pieces per Billet": pcs_results[best_billet_length]
-    #     }
-
-    #     log_df = pd.DataFrame([log_entry])
-
-    #     log_file = "billet_optimisation_log.csv"
-    #     if os.path.exists(log_file):
-    #         log_df.to_csv(log_file, mode='a', header=False, index=False)
-    #     else:
-    #         log_df.to_csv(log_file, index=False)
-
-    #     st.success("✅ Results logged successfully!")
-    # else:
-    #     st.warning("⚠️ No billet length meets the criteria of margin length > 1 meter.")
-
+    else:
+        st.warning("⚠️ No billet length meets the criteria (Extrusion length ≤ 28m and margin > 15%).")
 
     # Summary Table
     st.subheader("🧾 Summary Table")
+
+    # Build and format the DataFrame (no Styler, just values)
     df_summary = pd.DataFrame({
-        "Billet Length (cm)": billet_lengths,
-        "Margin Length (m)": [round(margin_results[b], 2) for b in billet_lengths],
-        "Recovery (%)": [round(recovery_results[b], 2) for b in billet_lengths],
-        "Pieces": [pcs_results[b] for b in billet_lengths]
-    }).sort_values(by="Recovery (%)", ascending=False)
+        "Billet Length (cm)": list(recovery_results.keys()),
+        "Extrusion length (m)": [f"{extrusion_results[b]:.3f}" for b in recovery_results.keys()],
+        "Margin Length (m)": [f"{margin_results[b]:.3f}" for b in recovery_results.keys()],
+        "Recovery (%)": [f"{recovery_results[b]:.2f}" for b in recovery_results.keys()],
+        "Pieces": [pcs_results[b] for b in recovery_results.keys()]
+    }).sort_values(by="Recovery (%)", ascending=False).reset_index(drop=True)
 
-    def highlight_optimal(row):
-        return ['background-color: #ffe599' if row['Billet Length (cm)'] == best_billet_length else '' for _ in row]
+    # Start HTML table
+    html = """
+    <style>
+        table {
+            width: 90%;
+            margin: auto;
+            border-collapse: collapse;
+            font-size: 16px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+        th {
+            background-color: #003366;
+            color: white;
+        }
+        tr.highlight {
+            background-color: #ffe599;
+        }
+    </style>
+    <table>
+        <tr>
+    """
 
-    st.dataframe(df_summary.style.apply(highlight_optimal, axis=1), height=400)
+    # Add table headers
+    for col in df_summary.columns:
+        html += f"<th>{col}</th>"
+    html += "</tr>"
+
+    # Add table rows
+    for _, row in df_summary.iterrows():
+        highlight_class = "highlight" if row["Billet Length (cm)"] == best_billet_length else ""
+        html += f"<tr class='{highlight_class}'>"
+        for cell in row:
+            html += f"<td>{cell}</td>"
+        html += "</tr>"
+
+    html += "</table>"
+
+    # Display in Streamlit
+    st.markdown(html, unsafe_allow_html=True)
+
+
+
+
 
     # Plotly Chart
     st.subheader("📊 Visual Comparison")
-
-    
-
-    # Bar trace with data labels
     trace1 = go.Bar(
         x=df_summary["Billet Length (cm)"],
         y=df_summary["Recovery (%)"],
@@ -140,26 +160,25 @@ if optimize and cut_length > 0 and num_holes > 0 and kg_per_m > 0:
         yaxis='y1'
     )
 
-    # Layout customization
     layout = go.Layout(
         title="Billet Length vs Recovery",
         xaxis=dict(
             title="Billet Length (cm)",
-            showgrid=False,          
+            showgrid=False,
             tickvals=df_summary["Billet Length (cm)"],
             ticktext=df_summary["Billet Length (cm)"],
-            tickangle=0,             
+            tickangle=0,
             linecolor='black',
             linewidth=1
         ),
         yaxis=dict(
             title="Recovery (%)",
-            showgrid=False,          
+            showgrid=False,
             showline=True,
             linecolor='black',
             linewidth=1
         ),
-        plot_bgcolor='white',        
+        plot_bgcolor='white',
         paper_bgcolor='white',
         legend=dict(
             x=0.5,
@@ -172,6 +191,6 @@ if optimize and cut_length > 0 and num_holes > 0 and kg_per_m > 0:
 
     fig = go.Figure(data=[trace1], layout=layout)
     st.plotly_chart(fig, use_container_width=True)
-    
+
 else:
     st.warning("Please enter valid values for all inputs to calculate recovery.")
