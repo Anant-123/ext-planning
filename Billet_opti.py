@@ -2,12 +2,11 @@ import streamlit as st
 import numpy as np
 import plotly.graph_objs as go
 import pandas as pd
-from datetime import datetime
 
-# Page configuration
+# Page config
 st.set_page_config(page_title="Billet Recovery Calculator", layout="wide", page_icon="🧮")
 
-# Custom CSS styling
+# Custom styling
 st.markdown("""
     <style>
         .main {background-color: #f9f9f9;}
@@ -15,7 +14,6 @@ st.markdown("""
             padding-top: 2rem;
             padding-bottom: 2rem;
         }
-        .stDataFrame {background-color: white; border-radius: 10px; padding: 10px;}
     </style>
 """, unsafe_allow_html=True)
 
@@ -24,11 +22,11 @@ st.markdown("<h1 style='text-align: center; color: #003366;'> Maximising Billet 
 st.markdown("<h4 style='text-align: center; color: #666666;'>Downstream Extrusion </h4>", unsafe_allow_html=True)
 st.markdown("---")
 
-# Fixed values
+# Constants
 conversion_factor = 1.1115
 billet_lengths = [80, 78, 76, 75, 73, 70, 67, 65, 63, 60, 58, 55, 53, 50, 48]
 
-# Sidebar user inputs
+# Sidebar inputs
 st.sidebar.header("🔧 Input Parameters")
 cut_length = st.sidebar.number_input("Cut Length (m)", min_value=0.001, step=0.01, format="%.3f")
 num_holes = st.sidebar.number_input("Number of Holes in Die", min_value=1, step=1)
@@ -37,7 +35,6 @@ caustic_etching = st.sidebar.radio("Is Caustic Etching applied?", ['Yes', 'No'])
 butt_weight = st.sidebar.number_input("The Butt weight (Kg)", min_value=1, value=4, step=1)
 optimize = st.sidebar.button("🚀 Find Optimized Billet")
 
-# Rounding logic
 rounding_option = 2 if caustic_etching == 'Yes' else 1
 
 # Core logic
@@ -54,10 +51,9 @@ if optimize and cut_length > 0 and num_holes > 0 and kg_per_m > 0:
         output_len = (billet_wt - butt_weight) / (num_holes * kg_per_m)
 
         if output_len > 28:
-            continue  # Skip this billet length
+            continue
 
         output_pcs = output_len / cut_length
-
         if 1 < output_pcs < 2:
             output_pcs_margin = np.floor(output_pcs)
         elif rounding_option == 1:
@@ -79,6 +75,7 @@ if optimize and cut_length > 0 and num_holes > 0 and kg_per_m > 0:
             max_recovery = recovery
             best_billet_length = b
 
+    # Optimal results
     st.subheader("📈 Optimal Result")
     if best_billet_length is not None:
         col1, col2, col3 = st.columns(3)
@@ -88,105 +85,85 @@ if optimize and cut_length > 0 and num_holes > 0 and kg_per_m > 0:
     else:
         st.warning("⚠️ No billet length meets the criteria (Extrusion length ≤ 28m and margin > 15%).")
 
-    # Summary Table
-    st.subheader("🧾 Summary Table")
-
-    # Build and format the DataFrame (no Styler, just values)
+    # -------------------- Create DataFrames --------------------
+    # Numeric version (used for plotting)
     df_summary = pd.DataFrame({
         "Billet Length (cm)": list(recovery_results.keys()),
-        "Extrusion length (m)": [f"{extrusion_results[b]:.3f}" for b in recovery_results.keys()],
-        "Margin Length (m)": [f"{margin_results[b]:.3f}" for b in recovery_results.keys()],
-        "Recovery (%)": [f"{recovery_results[b]:.2f}" for b in recovery_results.keys()],
+        "Extrusion length": [extrusion_results[b] for b in recovery_results.keys()],
+        "Margin Length (m)": [margin_results[b] for b in recovery_results.keys()],
+        "Recovery (%)": [recovery_results[b] for b in recovery_results.keys()],
         "Pieces": [pcs_results[b] for b in recovery_results.keys()]
     }).sort_values(by="Recovery (%)", ascending=False).reset_index(drop=True)
 
-    # Start HTML table
-    html = """
-    <style>
-        table {
-            width: 90%;
-            margin: auto;
-            border-collapse: collapse;
-            font-size: 16px;
-        }
-        th, td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: center;
-        }
-        th {
-            background-color: #003366;
-            color: white;
-        }
-        tr.highlight {
-            background-color: #ffe599;
-        }
-    </style>
-    <table>
-        <tr>
-    """
+    # Formatted version (used for display)
+    df_display = df_summary.copy()
+    df_display["Extrusion length"] = df_display["Extrusion length"].map("{:.3f}".format)
+    df_display["Margin Length (m)"] = df_display["Margin Length (m)"].map("{:.3f}".format)
+    df_display["Recovery (%)"] = df_display["Recovery (%)"].map("{:.2f}".format)
 
-    # Add table headers
-    for col in df_summary.columns:
-        html += f"<th>{col}</th>"
-    html += "</tr>"
-
-    # Add table rows
-    for _, row in df_summary.iterrows():
-        highlight_class = "highlight" if row["Billet Length (cm)"] == best_billet_length else ""
-        html += f"<tr class='{highlight_class}'>"
-        for cell in row:
-            html += f"<td>{cell}</td>"
+    # -------------------- Display Custom Table (No Index) --------------------
+    def generate_html_table(df, highlight_value):
+        html = """
+        <style>
+            table {
+                width: 90%;
+                margin: auto;
+                border-collapse: collapse;
+                font-size: 16px;
+            }
+            th, td {
+                border: 1px solid #ddd;
+                padding: 8px;
+                text-align: center;
+            }
+            th {
+                background-color: #003366;
+                color: white;
+            }
+            tr.highlight {
+                background-color: #ffe599;
+            }
+        </style>
+        <table>
+            <tr>
+        """
+        for col in df.columns:
+            html += f"<th>{col}</th>"
         html += "</tr>"
 
-    html += "</table>"
+        for _, row in df.iterrows():
+            highlight_class = "highlight" if float(row["Billet Length (cm)"]) == best_billet_length else ""
+            html += f"<tr class='{highlight_class}'>"
+            for cell in row:
+                html += f"<td>{cell}</td>"
+            html += "</tr>"
+        html += "</table>"
+        return html
 
-    # Display in Streamlit
-    st.markdown(html, unsafe_allow_html=True)
+    st.subheader("🧾 Summary Table")
+    table_html = generate_html_table(df_display, best_billet_length)
+    st.markdown(table_html, unsafe_allow_html=True)
 
-
-
-
-
-    # Plotly Chart
+    # -------------------- Plotly Bar Chart --------------------
     st.subheader("📊 Visual Comparison")
+
     trace1 = go.Bar(
         x=df_summary["Billet Length (cm)"],
         y=df_summary["Recovery (%)"],
-        name="Recovery (%)",
-        marker=dict(color='rgba(0, 200, 83, 0.7)', line=dict(width=1, color='black')),
         text=df_summary["Recovery (%)"].round(2),
         textposition='auto',
-        yaxis='y1'
+        marker=dict(color='rgba(0, 200, 83, 0.7)', line=dict(width=1, color='black')),
+        name="Recovery (%)"
     )
 
     layout = go.Layout(
         title="Billet Length vs Recovery",
-        xaxis=dict(
-            title="Billet Length (cm)",
-            showgrid=False,
-            tickvals=df_summary["Billet Length (cm)"],
-            ticktext=df_summary["Billet Length (cm)"],
-            tickangle=0,
-            linecolor='black',
-            linewidth=1
-        ),
-        yaxis=dict(
-            title="Recovery (%)",
-            showgrid=False,
-            showline=True,
-            linecolor='black',
-            linewidth=1
-        ),
+        xaxis=dict(title="Billet Length (cm)", linecolor='black', linewidth=1),
+        yaxis=dict(title="Recovery (%)", linecolor='black', linewidth=1),
         plot_bgcolor='white',
         paper_bgcolor='white',
-        legend=dict(
-            x=0.5,
-            y=1.1,
-            orientation='h',
-            xanchor='center'
-        ),
         margin=dict(t=40, b=80, l=60, r=60),
+        legend=dict(x=0.5, y=1.1, orientation='h', xanchor='center')
     )
 
     fig = go.Figure(data=[trace1], layout=layout)
